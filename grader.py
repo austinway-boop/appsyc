@@ -193,7 +193,7 @@ def grade_single_response(
     Returns:
         Parsed grading result dict with points, justifications, feedback.
     """
-    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    key = api_key or os.environ.get("CLAUDE")
     if not key:
         raise ValueError("No Anthropic API key provided.")
 

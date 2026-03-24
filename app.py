@@ -75,9 +75,9 @@ def grade():
         except Exception as e:
             return jsonify({"error": f"Failed to process {f.filename}: {e}"}), 400
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("CLAUDE")
     if not api_key:
-        return jsonify({"error": "Anthropic API key not configured. Set ANTHROPIC_API_KEY in .env file."}), 500
+        return jsonify({"error": "Anthropic API key not configured. Set CLAUDE environment variable."}), 500
 
     try:
         results = grade_all_responses(rubric_text, reference_text or "", question_text, responses, api_key)
