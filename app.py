@@ -5,12 +5,11 @@ Four-step workflow: rubric, reference material, questions, student responses.
 
 import csv
 import io
-import json
 import os
 import traceback
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context
+from flask import Flask, jsonify, render_template, request, Response
 
 from file_processor import is_supported, process_file
 from grader import grade_single_response
@@ -80,46 +79,25 @@ def grade():
     if not api_key:
         return jsonify({"error": "Anthropic API key not configured. Set CLAUDE environment variable."}), 500
 
-    def generate():
-        total = len(responses)
-        for i, resp in enumerate(responses):
-            yield "data: {}\n\n".format(json.dumps({
-                "type": "progress",
-                "current": i + 1,
-                "total": total,
-                "filename": resp.get("filename", ""),
-            }))
+    results = []
+    for resp in responses:
+        try:
+            result = grade_single_response(
+                rubric_text, reference_text or "", question_text, resp, api_key
+            )
+        except Exception as e:
+            traceback.print_exc()
+            result = {
+                "student_file": resp.get("filename", "unknown"),
+                "error": str(e),
+                "parts": [],
+                "total_score": 0,
+                "max_score": 0,
+                "overall_feedback": f"Grading failed: {e}",
+            }
+        results.append(result)
 
-            try:
-                result = grade_single_response(
-                    rubric_text, reference_text or "", question_text, resp, api_key
-                )
-            except Exception as e:
-                traceback.print_exc()
-                result = {
-                    "student_file": resp.get("filename", "unknown"),
-                    "error": str(e),
-                    "parts": [],
-                    "total_score": 0,
-                    "max_score": 0,
-                    "overall_feedback": f"Grading failed: {e}",
-                }
-
-            yield "data: {}\n\n".format(json.dumps({
-                "type": "result",
-                "result": result,
-            }))
-
-        yield "data: {}\n\n".format(json.dumps({"type": "done"}))
-
-    return Response(
-        stream_with_context(generate()),
-        content_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    return jsonify({"results": results})
 
 
 @app.route("/export-csv", methods=["POST"])

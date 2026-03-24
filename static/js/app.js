@@ -292,67 +292,60 @@ btnGrade.addEventListener("click", async () => {
     progressBarWrap.style.display = "block";
     progressBar.style.width = "5%";
 
-    const fd = new FormData();
-    fd.append("rubric_text", rubricText.value.trim());
-    fd.append("reference_text", referenceText.value.trim());
-    fd.append("question_text", questionText.value.trim());
-    if (rubricFileInput.files.length) fd.append("rubric_file", rubricFileInput.files[0]);
-    if (referenceFileInput.files.length) fd.append("reference_file", referenceFileInput.files[0]);
-    studentFiles.forEach((f) => fd.append("files[]", f));
+    const results = [];
 
-    try {
-        const resp = await fetch("/grade", { method: "POST", body: fd });
+    for (let i = 0; i < studentFiles.length; i++) {
+        loadingStatus.textContent = `Grading response ${i + 1} of ${total}: ${studentFiles[i].name}...`;
+        progressBar.style.width = (i / total * 85 + 5) + "%";
 
-        if (!resp.ok) {
+        const fd = new FormData();
+        fd.append("rubric_text", rubricText.value.trim());
+        fd.append("reference_text", referenceText.value.trim());
+        fd.append("question_text", questionText.value.trim());
+        if (rubricFileInput.files.length) fd.append("rubric_file", rubricFileInput.files[0]);
+        if (referenceFileInput.files.length) fd.append("reference_file", referenceFileInput.files[0]);
+        fd.append("files[]", studentFiles[i]);
+
+        try {
+            const resp = await fetch("/grade", { method: "POST", body: fd });
             const data = await resp.json();
-            showError(data.error || "Grading error.");
-            goToStep(4);
-            return;
-        }
-
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        const results = [];
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const chunks = buffer.split("\n\n");
-            buffer = chunks.pop();
-
-            for (const chunk of chunks) {
-                const line = chunk.trim();
-                if (!line.startsWith("data: ")) continue;
-                const msg = JSON.parse(line.slice(6));
-
-                if (msg.type === "progress") {
-                    progressBar.style.width = ((msg.current - 1) / msg.total * 85 + 5) + "%";
-                    loadingStatus.textContent = `Grading response ${msg.current} of ${msg.total}${msg.filename ? ": " + msg.filename : ""}...`;
-                } else if (msg.type === "result") {
-                    results.push(msg.result);
-                    progressBar.style.width = (results.length / total * 85 + 10) + "%";
-                } else if (msg.type === "done") {
-                    progressBar.style.width = "100%";
-                }
+            if (!resp.ok) {
+                results.push({
+                    student_file: studentFiles[i].name,
+                    error: data.error || "Grading error",
+                    parts: [],
+                    total_score: 0,
+                    max_score: 0,
+                    overall_feedback: data.error || "Grading failed.",
+                });
+            } else {
+                results.push(...data.results);
             }
+        } catch (err) {
+            results.push({
+                student_file: studentFiles[i].name,
+                error: err.message,
+                parts: [],
+                total_score: 0,
+                max_score: 0,
+                overall_feedback: "Network error: " + err.message,
+            });
         }
 
-        if (results.length === 0) {
-            showError("No grading results received.");
-            goToStep(4);
-            return;
-        }
-
-        gradingResults = results;
-        renderResults(gradingResults);
-        goToStep(5);
-    } catch (err) {
-        showError("Network error: " + err.message);
-        goToStep(4);
+        progressBar.style.width = ((i + 1) / total * 85 + 10) + "%";
     }
+
+    progressBar.style.width = "100%";
+
+    if (results.every((r) => r.error && !r.parts?.length)) {
+        showError(results[0].error || "All grading attempts failed.");
+        goToStep(4);
+        return;
+    }
+
+    gradingResults = results;
+    renderResults(gradingResults);
+    goToStep(5);
 });
 
 /* ===== Results ===== */
