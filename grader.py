@@ -18,8 +18,9 @@ AP_PSYCH_SYSTEM_PROMPT = """You are an expert AP Psychology FRQ grader. You have
 
 You will receive:
 1. The official scoring rubric for this FRQ
-2. The FRQ question/prompt
-3. A single student's response
+2. The reference material / source article that students read (if provided)
+3. The FRQ question/prompt
+4. A single student's response
 
 Grade the student's response strictly against the provided rubric, point by point.
 
@@ -136,14 +137,17 @@ The overall_feedback field must be a thorough summary paragraph (5-8 sentences) 
 Be precise. Be fair. Award every point the student has earned. Do not be more strict than a trained AP reader would be."""
 
 
-def _build_user_message(rubric: str, question: str, response_data: dict) -> list:
+def _build_user_message(rubric: str, reference: str, question: str, response_data: dict) -> list:
     """Build the user message content blocks for Claude."""
     content = []
+
+    ref_section = f"## REFERENCE MATERIAL / SOURCE ARTICLE\n\n{reference}\n\n" if reference else ""
 
     content.append({
         "type": "text",
         "text": (
             f"## SCORING RUBRIC\n\n{rubric}\n\n"
+            f"{ref_section}"
             f"## FRQ QUESTION / PROMPT\n\n{question}\n\n"
             "## STUDENT RESPONSE\n\n"
         ),
@@ -171,6 +175,7 @@ def _build_user_message(rubric: str, question: str, response_data: dict) -> list
 
 def grade_single_response(
     rubric: str,
+    reference: str,
     question: str,
     response_data: dict,
     api_key: Optional[str] = None,
@@ -180,6 +185,7 @@ def grade_single_response(
 
     Args:
         rubric: The scoring rubric text.
+        reference: The source article / reference material students read.
         question: The FRQ question/prompt text.
         response_data: Dict from file_processor.process_file().
         api_key: Anthropic API key (falls back to env var).
@@ -193,7 +199,7 @@ def grade_single_response(
 
     client = anthropic.Anthropic(api_key=key)
 
-    user_content = _build_user_message(rubric, question, response_data)
+    user_content = _build_user_message(rubric, reference, question, response_data)
 
     result_text = ""
     with client.messages.stream(
@@ -240,6 +246,7 @@ def grade_single_response(
 
 def grade_all_responses(
     rubric: str,
+    reference: str,
     question: str,
     responses: List[dict],
     api_key: Optional[str] = None,
@@ -249,6 +256,7 @@ def grade_all_responses(
 
     Args:
         rubric: The scoring rubric text.
+        reference: The source article / reference material students read.
         question: The FRQ question/prompt text.
         responses: List of dicts from file_processor.process_file().
         api_key: Anthropic API key.
@@ -259,7 +267,7 @@ def grade_all_responses(
     results = []
     for resp in responses:
         try:
-            result = grade_single_response(rubric, question, resp, api_key)
+            result = grade_single_response(rubric, reference, question, resp, api_key)
         except Exception as e:
             result = {
                 "student_file": resp.get("filename", "unknown"),

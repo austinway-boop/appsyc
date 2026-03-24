@@ -1,11 +1,10 @@
 """
 Flask application for the AP Psychology FRQ Grader.
-Two-part workflow: (1) enter rubric, (2) enter question + upload student files.
+Four-step workflow: rubric, reference material, questions, student responses.
 """
 
 import csv
 import io
-import json
 import os
 import traceback
 
@@ -26,35 +25,38 @@ def index():
     return render_template("index.html")
 
 
+def _extract_text_field(form_key, file_key, label):
+    """Extract text from a form field, falling back to an uploaded file."""
+    text = request.form.get(form_key, "").strip()
+
+    if request.files.get(file_key):
+        uploaded = request.files[file_key]
+        if uploaded.filename:
+            file_bytes = uploaded.read()
+            data = process_file(file_bytes, uploaded.filename)
+            if data["type"] == "text" and data["content"]:
+                text = data["content"]
+            elif data["type"] == "image":
+                return None, f"{label} must be a text-based file (TXT, MD, PDF, or DOCX), not an image."
+
+    return text, None
+
+
 @app.route("/grade", methods=["POST"])
 def grade():
-    """
-    Accepts multipart form data:
-      - rubric_text: the scoring rubric (string)
-      - question_text: the FRQ question/prompt (string)
-      - rubric_file: optional rubric uploaded as a file
-      - files[]: one or more student response files
-    """
-    rubric_text = request.form.get("rubric_text", "").strip()
-    question_text = request.form.get("question_text", "").strip()
-
-    if request.files.get("rubric_file"):
-        rubric_file = request.files["rubric_file"]
-        if rubric_file.filename:
-            rubric_bytes = rubric_file.read()
-            try:
-                rubric_data = process_file(rubric_bytes, rubric_file.filename)
-                if rubric_data["type"] == "text" and rubric_data["content"]:
-                    rubric_text = rubric_data["content"]
-                elif rubric_data["type"] == "image":
-                    return jsonify({"error": "Rubric must be a text-based file (TXT, PDF, or DOCX), not an image."}), 400
-            except Exception as e:
-                return jsonify({"error": f"Failed to process rubric file: {e}"}), 400
-
+    rubric_text, err = _extract_text_field("rubric_text", "rubric_file", "Rubric")
+    if err:
+        return jsonify({"error": err}), 400
     if not rubric_text:
-        return jsonify({"error": "Please provide a scoring rubric (paste text or upload a file)."}), 400
+        return jsonify({"error": "Please provide a scoring rubric."}), 400
+
+    reference_text, err = _extract_text_field("reference_text", "reference_file", "Reference material")
+    if err:
+        return jsonify({"error": err}), 400
+
+    question_text = request.form.get("question_text", "").strip()
     if not question_text:
-        return jsonify({"error": "Please provide the FRQ question/prompt."}), 400
+        return jsonify({"error": "Please provide the FRQ questions."}), 400
 
     student_files = request.files.getlist("files[]")
     if not student_files or all(not f.filename for f in student_files):
@@ -78,7 +80,7 @@ def grade():
         return jsonify({"error": "Anthropic API key not configured. Set ANTHROPIC_API_KEY in .env file."}), 500
 
     try:
-        results = grade_all_responses(rubric_text, question_text, responses, api_key)
+        results = grade_all_responses(rubric_text, reference_text or "", question_text, responses, api_key)
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": f"Grading failed: {e}"}), 500

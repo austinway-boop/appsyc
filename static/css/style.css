@@ -141,10 +141,10 @@ body {
 }
 
 .step-connector {
-    width: 40px;
+    width: 24px;
     height: 2px;
     background: var(--border);
-    margin: 0 0.75rem;
+    margin: 0 0.35rem;
     flex-shrink: 0;
     transition: background var(--transition);
 }
@@ -173,6 +173,23 @@ body {
     to   { opacity: 1; transform: translateY(0); }
 }
 
+.step-panel-header {
+    margin-bottom: 1.5rem;
+}
+
+.step-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary);
+    background: var(--primary-light);
+    padding: 0.15rem 0.55rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
 .step-panel h2 {
     font-size: 1.2rem;
     font-weight: 600;
@@ -182,7 +199,6 @@ body {
 .step-description {
     color: var(--text-muted);
     font-size: 0.9rem;
-    margin-bottom: 1.5rem;
 }
 
 /* ===== Inputs ===== */
@@ -528,10 +544,6 @@ textarea.has-content:focus {
 .step-actions {
     margin-top: 1.5rem;
     display: flex;
-    justify-content: flex-end;
-}
-
-.step-actions.two-buttons {
     justify-content: space-between;
 }
 
@@ -860,8 +872,14 @@ textarea.has-content:focus {
     }
 
     .step-connector {
+        width: 16px;
+        margin: 0 0.15rem;
+    }
+
+    .step-number {
         width: 28px;
-        margin: 0 0.4rem;
+        height: 28px;
+        font-size: 0.78rem;
     }
 
     .results-header {

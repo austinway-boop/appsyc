@@ -1,8 +1,10 @@
-/* ===== DOM References ===== */
+/* ===== DOM ===== */
 const stepPanels = {
     1: document.getElementById("step-1"),
     2: document.getElementById("step-2"),
     3: document.getElementById("step-3"),
+    4: document.getElementById("step-4"),
+    5: document.getElementById("step-5"),
     loading: document.getElementById("loading-panel"),
 };
 
@@ -12,28 +14,27 @@ const stepConnectors = document.querySelectorAll(".stepper .step-connector");
 const rubricText = document.getElementById("rubric-text");
 const rubricFileInput = document.getElementById("rubric-file");
 const rubricTextareaWrap = document.getElementById("rubric-textarea-wrap");
-const rubricDropHint = document.getElementById("rubric-drop-hint");
 const rubricCharCount = document.getElementById("rubric-char-count");
+
+const referenceText = document.getElementById("reference-text");
+const referenceFileInput = document.getElementById("reference-file");
+const referenceTextareaWrap = document.getElementById("reference-textarea-wrap");
+const referenceCharCount = document.getElementById("reference-char-count");
 
 const questionText = document.getElementById("question-text");
 const questionCharCount = document.getElementById("question-char-count");
-
-const rubricBanner = document.getElementById("rubric-banner");
-const rubricBannerDetail = document.getElementById("rubric-banner-detail");
-const btnEditRubric = document.getElementById("btn-edit-rubric");
 
 const dropZone = document.getElementById("drop-zone");
 const studentFilesInput = document.getElementById("student-files");
 const fileListEl = document.getElementById("file-list");
 const fileCountBadge = document.getElementById("file-count-badge");
 
-const btnNext1 = document.getElementById("btn-next-1");
-const btnBack2 = document.getElementById("btn-back-2");
 const btnGrade = document.getElementById("btn-grade");
 const btnGradeLabel = document.getElementById("btn-grade-label");
 const btnExportCsv = document.getElementById("btn-export-csv");
 const btnGradeMore = document.getElementById("btn-grade-more");
 const btnNewSession = document.getElementById("btn-new-session");
+
 const loadingStatus = document.getElementById("loading-status");
 const progressBarWrap = document.getElementById("progress-bar-wrap");
 const progressBar = document.getElementById("progress-bar");
@@ -67,22 +68,31 @@ function goToStep(num) {
         c.classList.toggle("filled", after < num);
     });
 
-    if (num === 2) {
-        updateRubricBanner();
+    if (num === 2) updateBannerRubric();
+    if (num === 3) updateBannerSource();
+    if (num === 4) {
+        updateBannerReady();
         updateGradeButton();
     }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-/* ===== Clickable stepper ===== */
+/* Clickable completed steps */
 stepIndicators.forEach((el) => {
     el.addEventListener("click", () => {
-        const target = parseInt(el.dataset.step);
         if (el.classList.contains("completed")) {
-            goToStep(target);
+            goToStep(parseInt(el.dataset.step));
         }
     });
+});
+
+/* Generic back/goto buttons */
+document.querySelectorAll("[data-back]").forEach((btn) => {
+    btn.addEventListener("click", () => goToStep(parseInt(btn.dataset.back)));
+});
+document.querySelectorAll("[data-goto]").forEach((btn) => {
+    btn.addEventListener("click", () => goToStep(parseInt(btn.dataset.goto)));
 });
 
 /* ===== Toast ===== */
@@ -93,205 +103,165 @@ function showError(msg) {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => errorToast.classList.add("hidden"), 8000);
 }
+toastClose.addEventListener("click", () => { errorToast.classList.add("hidden"); clearTimeout(toastTimer); });
 
-toastClose.addEventListener("click", () => {
-    errorToast.classList.add("hidden");
-    clearTimeout(toastTimer);
-});
-
-/* ===== Auto-growing textareas ===== */
-function autoGrow(textarea) {
-    textarea.style.height = "auto";
-    const minH = parseInt(textarea.rows) * 24 + 24;
-    textarea.style.height = Math.max(textarea.scrollHeight, minH) + "px";
+/* ===== Textarea helpers ===== */
+function autoGrow(ta) {
+    ta.style.height = "auto";
+    const min = parseInt(ta.rows) * 24 + 24;
+    ta.style.height = Math.max(ta.scrollHeight, min) + "px";
 }
 
-function updateCharCount(textarea, countEl) {
-    const len = textarea.value.trim().length;
-    if (len === 0) {
-        countEl.textContent = "";
-        textarea.classList.remove("has-content");
-    } else {
-        const words = textarea.value.trim().split(/\s+/).length;
-        countEl.textContent = `${words} word${words !== 1 ? "s" : ""}`;
-        textarea.classList.add("has-content");
+function updateCharCount(ta, el) {
+    const len = ta.value.trim().length;
+    if (len === 0) { el.textContent = ""; ta.classList.remove("has-content"); }
+    else {
+        const w = ta.value.trim().split(/\s+/).length;
+        el.textContent = `${w} word${w !== 1 ? "s" : ""}`;
+        ta.classList.add("has-content");
     }
 }
 
-rubricText.addEventListener("input", () => {
-    autoGrow(rubricText);
-    updateCharCount(rubricText, rubricCharCount);
-});
+function wireTextarea(ta, countEl) {
+    ta.addEventListener("input", () => { autoGrow(ta); updateCharCount(ta, countEl); });
+}
 
-questionText.addEventListener("input", () => {
-    autoGrow(questionText);
-    updateCharCount(questionText, questionCharCount);
-});
+wireTextarea(rubricText, rubricCharCount);
+wireTextarea(referenceText, referenceCharCount);
+wireTextarea(questionText, questionCharCount);
 
-/* ===== Step 1: Rubric file drop on textarea ===== */
-rubricTextareaWrap.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    rubricTextareaWrap.classList.add("drag-over");
-});
-
-rubricTextareaWrap.addEventListener("dragleave", (e) => {
-    if (!rubricTextareaWrap.contains(e.relatedTarget)) {
-        rubricTextareaWrap.classList.remove("drag-over");
-    }
-});
-
-rubricTextareaWrap.addEventListener("drop", (e) => {
-    e.preventDefault();
-    rubricTextareaWrap.classList.remove("drag-over");
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        const file = files[0];
-        const ext = file.name.split(".").pop().toLowerCase();
+/* ===== File drop on textareas ===== */
+function wireTextareaDrop(wrap, ta, fileInput, countEl, label) {
+    wrap.addEventListener("dragover", (e) => { e.preventDefault(); wrap.classList.add("drag-over"); });
+    wrap.addEventListener("dragleave", (e) => { if (!wrap.contains(e.relatedTarget)) wrap.classList.remove("drag-over"); });
+    wrap.addEventListener("drop", (e) => {
+        e.preventDefault();
+        wrap.classList.remove("drag-over");
+        const f = e.dataTransfer.files[0];
+        if (!f) return;
+        const ext = f.name.split(".").pop().toLowerCase();
         if (["txt", "md"].includes(ext)) {
             const reader = new FileReader();
-            reader.onload = (ev) => {
-                rubricText.value = ev.target.result;
-                autoGrow(rubricText);
-                updateCharCount(rubricText, rubricCharCount);
-            };
-            reader.readAsText(file);
+            reader.onload = (ev) => { ta.value = ev.target.result; autoGrow(ta); updateCharCount(ta, countEl); };
+            reader.readAsText(f);
         } else if (["pdf", "docx"].includes(ext)) {
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            rubricFileInput.files = dt.files;
-            rubricText.value = "";
-            rubricText.placeholder = `File loaded: ${file.name}\n\nThe file will be processed on the server when grading begins.`;
-            rubricText.classList.add("has-content");
-            updateCharCount(rubricText, rubricCharCount);
-            rubricCharCount.textContent = file.name;
+            const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files;
+            ta.value = ""; ta.placeholder = `File loaded: ${f.name}`; ta.classList.add("has-content");
+            countEl.textContent = f.name;
         } else {
-            showError("Rubric must be TXT, MD, PDF, or DOCX.");
+            showError(`${label} must be TXT, MD, PDF, or DOCX.`);
         }
-    }
-});
+    });
+}
 
-/* ===== Step 1: Rubric file picker ===== */
-rubricFileInput.addEventListener("change", () => {
-    if (rubricFileInput.files.length > 0) {
-        const file = rubricFileInput.files[0];
-        const ext = file.name.split(".").pop().toLowerCase();
+wireTextareaDrop(rubricTextareaWrap, rubricText, rubricFileInput, rubricCharCount, "Rubric");
+wireTextareaDrop(referenceTextareaWrap, referenceText, referenceFileInput, referenceCharCount, "Reference material");
+
+/* File picker for rubric & reference */
+function wireFilePicker(fileInput, ta, countEl) {
+    fileInput.addEventListener("change", () => {
+        if (!fileInput.files.length) return;
+        const f = fileInput.files[0];
+        const ext = f.name.split(".").pop().toLowerCase();
         if (["txt", "md"].includes(ext)) {
             const reader = new FileReader();
-            reader.onload = (ev) => {
-                rubricText.value = ev.target.result;
-                autoGrow(rubricText);
-                updateCharCount(rubricText, rubricCharCount);
-                rubricFileInput.value = "";
-            };
-            reader.readAsText(file);
+            reader.onload = (ev) => { ta.value = ev.target.result; autoGrow(ta); updateCharCount(ta, countEl); fileInput.value = ""; };
+            reader.readAsText(f);
         } else {
-            rubricText.placeholder = `File loaded: ${file.name}\n\nThe file will be processed on the server when grading begins.`;
-            rubricText.classList.add("has-content");
-            rubricCharCount.textContent = file.name;
+            ta.placeholder = `File loaded: ${f.name}`; ta.classList.add("has-content");
+            countEl.textContent = f.name;
         }
-    }
-});
+    });
+}
 
-/* ===== Step 1: Next ===== */
-btnNext1.addEventListener("click", () => {
-    const hasText = rubricText.value.trim().length > 0;
-    const hasFile = rubricFileInput.files.length > 0;
-    if (!hasText && !hasFile) {
-        showError("Please paste a rubric or upload a rubric file before continuing.");
-        rubricText.focus();
-        return;
+wireFilePicker(rubricFileInput, rubricText, rubricCharCount);
+wireFilePicker(referenceFileInput, referenceText, referenceCharCount);
+
+/* ===== Step transitions ===== */
+document.getElementById("btn-next-1").addEventListener("click", () => {
+    if (!rubricText.value.trim() && !rubricFileInput.files.length) {
+        showError("Please paste or upload a scoring rubric."); rubricText.focus(); return;
     }
     goToStep(2);
 });
 
-/* ===== Rubric banner on Step 2 ===== */
-function updateRubricBanner() {
-    const text = rubricText.value.trim();
-    const hasFile = rubricFileInput.files.length > 0;
-    if (text) {
-        const words = text.split(/\s+/).length;
-        const preview = text.substring(0, 80).replace(/\n/g, " ");
-        rubricBannerDetail.textContent = `\u2014 ${words} words: "${preview}${text.length > 80 ? "..." : ""}"`;
-    } else if (hasFile) {
-        rubricBannerDetail.textContent = `\u2014 ${rubricFileInput.files[0].name}`;
-    } else {
-        rubricBannerDetail.textContent = "";
+document.getElementById("btn-next-2").addEventListener("click", () => {
+    goToStep(3);
+});
+
+document.getElementById("btn-next-3").addEventListener("click", () => {
+    if (!questionText.value.trim()) {
+        showError("Please paste the FRQ questions."); questionText.focus(); return;
     }
+    goToStep(4);
+});
+
+/* ===== Banners ===== */
+function preview(text, maxLen) {
+    const flat = text.replace(/\n/g, " ").trim();
+    return flat.length > maxLen ? flat.substring(0, maxLen) + "..." : flat;
 }
 
-btnEditRubric.addEventListener("click", () => goToStep(1));
+function updateBannerRubric() {
+    const el = document.getElementById("banner-rubric-detail");
+    const t = rubricText.value.trim();
+    if (t) el.textContent = `\u2014 ${t.split(/\s+/).length} words: "${preview(t, 60)}"`;
+    else if (rubricFileInput.files.length) el.textContent = `\u2014 ${rubricFileInput.files[0].name}`;
+    else el.textContent = "";
+}
 
-/* ===== Step 2: Drag & Drop ===== */
+function updateBannerSource() {
+    const el = document.getElementById("banner-source-detail");
+    const r = referenceText.value.trim();
+    if (r) el.textContent = `\u2014 source: ${r.split(/\s+/).length} words`;
+    else if (referenceFileInput.files.length) el.textContent = `\u2014 source: ${referenceFileInput.files[0].name}`;
+    else el.textContent = `\u2014 no source material (rubric-only grading)`;
+}
+
+function updateBannerReady() {
+    const el = document.getElementById("banner-ready-detail");
+    const parts = [];
+    const rt = rubricText.value.trim();
+    parts.push(`rubric (${rt ? rt.split(/\s+/).length + " words" : rubricFileInput.files[0]?.name || "?"})`);
+    const ref = referenceText.value.trim();
+    if (ref || referenceFileInput.files.length) parts.push("source material");
+    const qt = questionText.value.trim();
+    if (qt) parts.push(`${qt.split(/\n/).filter(l => l.trim().match(/^\(?[A-Z]/)).length || "?"} question parts`);
+    el.textContent = `\u2014 ${parts.join(", ")}`;
+}
+
+/* ===== Student files ===== */
 dropZone.addEventListener("click", () => studentFilesInput.click());
+dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", (e) => { e.preventDefault(); dropZone.classList.remove("drag-over"); addFiles(e.dataTransfer.files); });
+studentFilesInput.addEventListener("change", () => { addFiles(studentFilesInput.files); studentFilesInput.value = ""; });
 
-dropZone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dropZone.classList.add("drag-over");
-});
+const ALLOWED = ["txt", "md", "pdf", "docx", "jpg", "jpeg", "png", "gif", "webp"];
 
-dropZone.addEventListener("dragleave", () => {
-    dropZone.classList.remove("drag-over");
-});
-
-dropZone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropZone.classList.remove("drag-over");
-    addFiles(e.dataTransfer.files);
-});
-
-studentFilesInput.addEventListener("change", () => {
-    addFiles(studentFilesInput.files);
-    studentFilesInput.value = "";
-});
-
-const ALLOWED_EXTENSIONS = ["txt", "md", "pdf", "docx", "jpg", "jpeg", "png", "gif", "webp"];
-
-function addFiles(fileList) {
-    for (const f of fileList) {
+function addFiles(list) {
+    for (const f of list) {
         const ext = f.name.split(".").pop().toLowerCase();
-        if (!ALLOWED_EXTENSIONS.includes(ext)) {
-            showError(`Unsupported file type: .${ext}`);
-            continue;
-        }
-        const alreadyAdded = studentFiles.some((sf) => sf.name === f.name && sf.size === f.size);
-        if (!alreadyAdded) {
-            studentFiles.push(f);
-        }
+        if (!ALLOWED.includes(ext)) { showError(`Unsupported file type: .${ext}`); continue; }
+        if (!studentFiles.some((sf) => sf.name === f.name && sf.size === f.size)) studentFiles.push(f);
     }
     renderFileList();
     updateGradeButton();
 }
 
-function removeFile(index) {
-    studentFiles.splice(index, 1);
-    renderFileList();
-    updateGradeButton();
-}
+function removeFile(i) { studentFiles.splice(i, 1); renderFileList(); updateGradeButton(); }
 
 function updateGradeButton() {
-    const hasQuestion = questionText.value.trim().length > 0;
-    const hasFiles = studentFiles.length > 0;
-    btnGrade.disabled = !hasQuestion || !hasFiles;
-
-    if (studentFiles.length === 0) {
-        btnGradeLabel.textContent = "Grade Responses";
-    } else {
-        btnGradeLabel.textContent = `Grade ${studentFiles.length} Response${studentFiles.length > 1 ? "s" : ""}`;
-    }
-
-    if (studentFiles.length > 0) {
-        fileCountBadge.textContent = studentFiles.length;
-        fileCountBadge.classList.add("visible");
-    } else {
-        fileCountBadge.classList.remove("visible");
-    }
+    btnGrade.disabled = studentFiles.length === 0;
+    btnGradeLabel.textContent = studentFiles.length === 0
+        ? "Grade Responses"
+        : `Grade ${studentFiles.length} Response${studentFiles.length > 1 ? "s" : ""}`;
+    if (studentFiles.length > 0) { fileCountBadge.textContent = studentFiles.length; fileCountBadge.classList.add("visible"); }
+    else fileCountBadge.classList.remove("visible");
 }
-
-questionText.addEventListener("input", updateGradeButton);
 
 function renderFileList() {
     fileListEl.innerHTML = "";
-
     if (studentFiles.length > 0) {
         dropZone.classList.add("has-files");
         dropZone.querySelector("p").textContent = `${studentFiles.length} file${studentFiles.length > 1 ? "s" : ""} added \u2014 click or drop to add more`;
@@ -299,49 +269,20 @@ function renderFileList() {
         dropZone.classList.remove("has-files");
         dropZone.querySelector("p").textContent = "Drag & drop student files here";
     }
-
     studentFiles.forEach((f, i) => {
-        const size = f.size < 1024 * 1024
-            ? (f.size / 1024).toFixed(1) + " KB"
-            : (f.size / (1024 * 1024)).toFixed(1) + " MB";
-
-        const el = document.createElement("div");
-        el.className = "file-item";
+        const size = f.size < 1024 * 1024 ? (f.size / 1024).toFixed(1) + " KB" : (f.size / (1024 * 1024)).toFixed(1) + " MB";
+        const el = document.createElement("div"); el.className = "file-item";
         el.innerHTML = `
-            <span class="file-item-name">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <span>${escapeHtml(f.name)}</span>
-            </span>
-            <span class="file-item-right">
-                <span class="file-item-size">${size}</span>
-                <button class="file-item-remove" title="Remove">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-            </span>
-        `;
-        el.querySelector(".file-item-remove").addEventListener("click", (e) => {
-            e.stopPropagation();
-            removeFile(i);
-        });
+            <span class="file-item-name"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>${esc(f.name)}</span></span>
+            <span class="file-item-right"><span class="file-item-size">${size}</span><button class="file-item-remove" title="Remove"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>`;
+        el.querySelector(".file-item-remove").addEventListener("click", (e) => { e.stopPropagation(); removeFile(i); });
         fileListEl.appendChild(el);
     });
 }
 
-/* ===== Step 2: Back ===== */
-btnBack2.addEventListener("click", () => goToStep(1));
-
 /* ===== Grade ===== */
 btnGrade.addEventListener("click", async () => {
-    const question = questionText.value.trim();
-    if (!question) {
-        showError("Please enter the FRQ question/prompt.");
-        questionText.focus();
-        return;
-    }
-    if (studentFiles.length === 0) {
-        showError("Please upload at least one student response file.");
-        return;
-    }
+    if (studentFiles.length === 0) { showError("Upload at least one student response."); return; }
 
     Object.values(stepPanels).forEach((p) => p.classList.remove("active"));
     stepPanels.loading.classList.add("active");
@@ -351,211 +292,110 @@ btnGrade.addEventListener("click", async () => {
     progressBarWrap.style.display = "block";
     progressBar.style.width = "5%";
 
-    const formData = new FormData();
-    formData.append("rubric_text", rubricText.value.trim());
-    formData.append("question_text", question);
+    const fd = new FormData();
+    fd.append("rubric_text", rubricText.value.trim());
+    fd.append("reference_text", referenceText.value.trim());
+    fd.append("question_text", questionText.value.trim());
+    if (rubricFileInput.files.length) fd.append("rubric_file", rubricFileInput.files[0]);
+    if (referenceFileInput.files.length) fd.append("reference_file", referenceFileInput.files[0]);
+    studentFiles.forEach((f) => fd.append("files[]", f));
 
-    if (rubricFileInput.files.length > 0) {
-        formData.append("rubric_file", rubricFileInput.files[0]);
-    }
-
-    studentFiles.forEach((f) => {
-        formData.append("files[]", f);
-    });
-
-    const estimatedMs = total * 45000;
-    const startTime = Date.now();
-    const progressInterval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const pct = Math.min(90, (elapsed / estimatedMs) * 90 + 5);
-        progressBar.style.width = pct + "%";
-
-        const studentIdx = Math.min(Math.floor(elapsed / 45000) + 1, total);
-        const fileName = studentFiles[studentIdx - 1]?.name || "";
-        loadingStatus.textContent = `Grading response ${studentIdx} of ${total}${fileName ? ": " + fileName : ""}...`;
+    const est = total * 45000;
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+        const el = Date.now() - t0;
+        progressBar.style.width = Math.min(90, el / est * 90 + 5) + "%";
+        const idx = Math.min(Math.floor(el / 45000) + 1, total);
+        const name = studentFiles[idx - 1]?.name || "";
+        loadingStatus.textContent = `Grading response ${idx} of ${total}${name ? ": " + name : ""}...`;
     }, 2000);
 
     try {
-        const resp = await fetch("/grade", {
-            method: "POST",
-            body: formData,
-        });
-
-        clearInterval(progressInterval);
+        const resp = await fetch("/grade", { method: "POST", body: fd });
+        clearInterval(iv);
         progressBar.style.width = "100%";
-
         const data = await resp.json();
-
-        if (!resp.ok) {
-            showError(data.error || "An error occurred while grading.");
-            goToStep(2);
-            return;
-        }
-
+        if (!resp.ok) { showError(data.error || "Grading error."); goToStep(4); return; }
         gradingResults = data.results;
         renderResults(gradingResults);
-        goToStep(3);
-    } catch (err) {
-        clearInterval(progressInterval);
-        showError("Network error: " + err.message);
-        goToStep(2);
-    }
+        goToStep(5);
+    } catch (err) { clearInterval(iv); showError("Network error: " + err.message); goToStep(4); }
 });
 
-/* ===== Results Rendering ===== */
+/* ===== Results ===== */
 function renderResults(results) {
-    summaryStats.innerHTML = "";
-    resultsContainer.innerHTML = "";
-
-    const totalStudents = results.length;
+    summaryStats.innerHTML = ""; resultsContainer.innerHTML = "";
+    const n = results.length;
     const scores = results.map((r) => r.total_score || 0);
-    const maxScores = results.map((r) => r.max_score || 7);
-    const mean = scores.reduce((a, b) => a + b, 0) / totalStudents;
-    const maxPossible = maxScores[0] || 7;
-    const highest = Math.max(...scores);
-    const lowest = Math.min(...scores);
+    const max = results[0]?.max_score || 7;
+    const mean = scores.reduce((a, b) => a + b, 0) / n;
 
     summaryStats.innerHTML = `
-        <div class="stat-card">
-            <div class="stat-value">${totalStudents}</div>
-            <div class="stat-label">Responses</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">${mean.toFixed(1)} / ${maxPossible}</div>
-            <div class="stat-label">Mean Score</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">${highest}</div>
-            <div class="stat-label">Highest</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">${lowest}</div>
-            <div class="stat-label">Lowest</div>
-        </div>
-    `;
+        <div class="stat-card"><div class="stat-value">${n}</div><div class="stat-label">Responses</div></div>
+        <div class="stat-card"><div class="stat-value">${mean.toFixed(1)} / ${max}</div><div class="stat-label">Mean Score</div></div>
+        <div class="stat-card"><div class="stat-value">${Math.max(...scores)}</div><div class="stat-label">Highest</div></div>
+        <div class="stat-card"><div class="stat-value">${Math.min(...scores)}</div><div class="stat-label">Lowest</div></div>`;
 
     results.forEach((r, idx) => {
         if (r.error && !r.parts?.length) {
-            const errEl = document.createElement("div");
-            errEl.className = "error-card";
-            errEl.textContent = `${r.student_file}: ${r.error}`;
-            resultsContainer.appendChild(errEl);
+            resultsContainer.insertAdjacentHTML("beforeend", `<div class="error-card">${esc(r.student_file)}: ${esc(r.error)}</div>`);
             return;
         }
+        const sc = r.total_score || 0, mx = r.max_score || 7, pct = mx > 0 ? sc / mx : 0;
+        const cls = pct >= 0.7 ? "score-high" : pct >= 0.4 ? "score-mid" : "score-low";
 
-        const score = r.total_score || 0;
-        const max = r.max_score || 7;
-        const pct = max > 0 ? score / max : 0;
-        const scoreClass = pct >= 0.7 ? "score-high" : pct >= 0.4 ? "score-mid" : "score-low";
+        let parts = "";
+        (r.parts || []).forEach((p) => {
+            const e = p.points_earned > 0;
+            parts += `<div class="part-row"><div class="part-indicator ${e ? "earned" : "not-earned"}">${e ? p.points_earned : 0}</div><div class="part-details"><div class="part-label">Part ${esc(p.part)} \u2014 ${p.points_earned}/${p.points_possible} pt${p.points_possible > 1 ? "s" : ""}</div><div class="part-justification">${esc(p.justification || "")}</div></div></div>`;
+        });
 
         const card = document.createElement("div");
         card.className = "student-card" + (idx === 0 ? " open" : "");
-
-        let partsHtml = "";
-        (r.parts || []).forEach((p) => {
-            const earned = p.points_earned > 0;
-            partsHtml += `
-                <div class="part-row">
-                    <div class="part-indicator ${earned ? "earned" : "not-earned"}">${earned ? p.points_earned : 0}</div>
-                    <div class="part-details">
-                        <div class="part-label">Part ${escapeHtml(p.part)} \u2014 ${p.points_earned}/${p.points_possible} pt${p.points_possible > 1 ? "s" : ""}</div>
-                        <div class="part-justification">${escapeHtml(p.justification || "")}</div>
-                    </div>
-                </div>
-            `;
-        });
-
         card.innerHTML = `
             <div class="student-card-header">
                 <div class="student-card-left">
-                    <span class="student-card-filename">${escapeHtml(r.student_file || "Student " + (idx + 1))}</span>
-                    <span class="student-card-score ${scoreClass}">${score} / ${max}</span>
+                    <span class="student-card-filename">${esc(r.student_file || "Student " + (idx + 1))}</span>
+                    <span class="student-card-score ${cls}">${sc} / ${mx}</span>
                 </div>
                 <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
-            <div class="student-card-body">
-                ${partsHtml}
-                ${r.overall_feedback ? `<div class="overall-feedback"><strong>Overall Feedback:</strong> ${escapeHtml(r.overall_feedback)}</div>` : ""}
-            </div>
-        `;
-
-        card.querySelector(".student-card-header").addEventListener("click", () => {
-            card.classList.toggle("open");
-        });
-
+            <div class="student-card-body">${parts}${r.overall_feedback ? `<div class="overall-feedback"><strong>Overall Feedback:</strong> ${esc(r.overall_feedback)}</div>` : ""}</div>`;
+        card.querySelector(".student-card-header").addEventListener("click", () => card.classList.toggle("open"));
         resultsContainer.appendChild(card);
     });
 }
 
-/* ===== Export CSV ===== */
+/* ===== Export ===== */
 btnExportCsv.addEventListener("click", async () => {
     if (!gradingResults) return;
-
     try {
-        const resp = await fetch("/export-csv", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ results: gradingResults }),
-        });
-
-        if (!resp.ok) {
-            showError("Failed to export CSV.");
-            return;
-        }
-
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "grading_results.csv";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-    } catch (err) {
-        showError("Export failed: " + err.message);
-    }
+        const r = await fetch("/export-csv", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: gradingResults }) });
+        if (!r.ok) { showError("Export failed."); return; }
+        const b = await r.blob(), u = URL.createObjectURL(b), a = document.createElement("a");
+        a.href = u; a.download = "grading_results.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
+    } catch (e) { showError("Export failed: " + e.message); }
 });
 
-/* ===== Grade More (keep rubric, clear files) ===== */
+/* Grade More = keep rubric + source + questions, clear files */
 btnGradeMore.addEventListener("click", () => {
-    questionText.value = "";
-    studentFiles = [];
-    gradingResults = null;
-    fileListEl.innerHTML = "";
-    summaryStats.innerHTML = "";
-    resultsContainer.innerHTML = "";
-    updateCharCount(questionText, questionCharCount);
-    autoGrow(questionText);
-    goToStep(2);
+    studentFiles = []; gradingResults = null;
+    fileListEl.innerHTML = ""; summaryStats.innerHTML = ""; resultsContainer.innerHTML = "";
+    goToStep(4);
 });
 
-/* ===== Start Over ===== */
+/* Start Over = full reset */
 btnNewSession.addEventListener("click", () => {
-    rubricText.value = "";
-    rubricText.placeholder = 'Paste the scoring guidelines here. Example:\n\nPart A (1 point): Identifies the research method used in the study...';
-    rubricText.classList.remove("has-content");
-    rubricFileInput.value = "";
-    rubricCharCount.textContent = "";
-    questionText.value = "";
-    questionText.classList.remove("has-content");
-    questionCharCount.textContent = "";
-    studentFiles = [];
-    gradingResults = null;
-    fileListEl.innerHTML = "";
-    summaryStats.innerHTML = "";
-    resultsContainer.innerHTML = "";
-    autoGrow(rubricText);
-    autoGrow(questionText);
+    [rubricText, referenceText, questionText].forEach((ta) => { ta.value = ""; ta.classList.remove("has-content"); ta.style.height = ""; });
+    [rubricFileInput, referenceFileInput].forEach((f) => { f.value = ""; });
+    [rubricCharCount, referenceCharCount, questionCharCount].forEach((c) => { c.textContent = ""; });
+    studentFiles = []; gradingResults = null;
+    fileListEl.innerHTML = ""; summaryStats.innerHTML = ""; resultsContainer.innerHTML = "";
     goToStep(1);
 });
 
 /* ===== Helpers ===== */
-function escapeHtml(str) {
-    const div = document.createElement("div");
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-}
+function esc(s) { const d = document.createElement("div"); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
 
-/* ===== Init ===== */
+/* Init */
 updateGradeButton();
