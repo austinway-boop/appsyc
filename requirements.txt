@@ -1,0 +1,6 @@
+flask
+anthropic
+pdfplumber
+python-docx
+Pillow
+python-dotenv

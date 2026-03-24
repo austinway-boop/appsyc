@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AP Psych FRQ Grader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>AP Psychology FRQ Grader</h1>
+            <p class="subtitle">Point-by-point analytic scoring powered by Claude</p>
+        </header>
+
+        <!-- Stepper -->
+        <div class="stepper">
+            <div class="step active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">Rubric</div>
+            </div>
+            <div class="step-connector" data-after="1"></div>
+            <div class="step" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">Question & Responses</div>
+            </div>
+            <div class="step-connector" data-after="2"></div>
+            <div class="step" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">Results</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Rubric -->
+        <section id="step-1" class="step-panel active">
+            <h2>Step 1: Enter the Scoring Rubric</h2>
+            <p class="step-description">Paste the official AP scoring rubric below, or drop/upload a file (TXT, MD, PDF, DOCX).</p>
+
+            <div class="input-group">
+                <label for="rubric-text">Scoring Rubric</label>
+                <div class="textarea-wrap" id="rubric-textarea-wrap">
+                    <textarea id="rubric-text" rows="12" placeholder="Paste the scoring guidelines here. Example:
+
+Part A (1 point): Identifies the research method used in the study. Acceptable answers include &quot;experiment&quot; or &quot;experimental study.&quot;
+
+Part B (1 point): States the operational definition of the specified variable as a measurable quantity described in the study.
+
+Part C (1 point): Describes what the reported statistic indicates about the groups being compared.
+
+...and so on for each scoring point."></textarea>
+                    <div class="textarea-drop-hint" id="rubric-drop-hint">Drop file here to load rubric</div>
+                </div>
+                <div class="textarea-footer">
+                    <span class="char-count" id="rubric-char-count"></span>
+                    <label class="upload-link" for="rubric-file">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Upload file instead
+                    </label>
+                    <input type="file" id="rubric-file" accept=".txt,.md,.pdf,.docx" hidden>
+                </div>
+            </div>
+
+            <div class="step-actions">
+                <button class="btn btn-primary" id="btn-next-1">
+                    Continue
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- Step 2: Question + Files -->
+        <section id="step-2" class="step-panel">
+            <h2>Step 2: Enter Question & Upload Responses</h2>
+            <p class="step-description">Provide the FRQ question, then upload each student's response as a separate file.</p>
+
+            <!-- Rubric loaded banner -->
+            <div class="context-banner" id="rubric-banner">
+                <div class="context-banner-left">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <span>Rubric loaded</span>
+                    <span class="context-banner-detail" id="rubric-banner-detail"></span>
+                </div>
+                <button class="context-banner-action" id="btn-edit-rubric">Edit</button>
+            </div>
+
+            <div class="input-group">
+                <label for="question-text">FRQ Question / Prompt</label>
+                <div class="textarea-wrap">
+                    <textarea id="question-text" rows="7" placeholder="Paste the full FRQ prompt here. Example:
+
+The following summary describes a study on the effects of sleep deprivation on cognitive performance. Read the summary and answer the questions that follow.
+
+(A) Identify the research method used in this study.
+(B) State the operational definition of &quot;sleep deprivation&quot; as described in the study.
+(C) Describe what the reported difference in mean scores indicates.
+..."></textarea>
+                </div>
+                <div class="textarea-footer">
+                    <span class="char-count" id="question-char-count"></span>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Student Response Files <span class="file-count-badge" id="file-count-badge"></span></label>
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <p>Drag & drop student files here</p>
+                        <p class="drop-zone-hint">or click to browse &mdash; one file per student response</p>
+                        <p class="drop-zone-formats">TXT, MD, PDF, DOCX, JPG, PNG</p>
+                    </div>
+                    <input type="file" id="student-files" multiple accept=".txt,.md,.pdf,.docx,.jpg,.jpeg,.png,.gif,.webp" hidden>
+                </div>
+                <div id="file-list" class="file-list"></div>
+            </div>
+
+            <div class="step-actions two-buttons">
+                <button class="btn btn-secondary" id="btn-back-2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                    Back
+                </button>
+                <button class="btn btn-primary" id="btn-grade" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <span id="btn-grade-label">Grade Responses</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Loading -->
+        <section id="loading-panel" class="step-panel">
+            <div class="loading-container">
+                <div class="spinner"></div>
+                <h2>Grading in Progress</h2>
+                <p class="loading-status" id="loading-status">Sending responses to Claude for point-by-point scoring...</p>
+                <p class="loading-hint">This may take 30-60 seconds per student response.</p>
+                <div class="progress-bar-wrap" id="progress-bar-wrap" style="display:none;">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 3: Results -->
+        <section id="step-3" class="step-panel">
+            <div class="results-header">
+                <h2>Grading Results</h2>
+                <div class="results-actions">
+                    <button class="btn btn-secondary btn-sm" id="btn-export-csv">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export CSV
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="btn-grade-more">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Grade More
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="btn-new-session">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                        Start Over
+                    </button>
+                </div>
+            </div>
+
+            <div id="summary-stats" class="summary-stats"></div>
+            <div id="results-container" class="results-container"></div>
+        </section>
+
+        <!-- Error toast -->
+        <div id="error-toast" class="error-toast hidden">
+            <span id="error-message"></span>
+            <button class="toast-close" id="toast-close">&times;</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
