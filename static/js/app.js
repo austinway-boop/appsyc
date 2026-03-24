@@ -300,26 +300,59 @@ btnGrade.addEventListener("click", async () => {
     if (referenceFileInput.files.length) fd.append("reference_file", referenceFileInput.files[0]);
     studentFiles.forEach((f) => fd.append("files[]", f));
 
-    const est = total * 45000;
-    const t0 = Date.now();
-    const iv = setInterval(() => {
-        const el = Date.now() - t0;
-        progressBar.style.width = Math.min(90, el / est * 90 + 5) + "%";
-        const idx = Math.min(Math.floor(el / 45000) + 1, total);
-        const name = studentFiles[idx - 1]?.name || "";
-        loadingStatus.textContent = `Grading response ${idx} of ${total}${name ? ": " + name : ""}...`;
-    }, 2000);
-
     try {
         const resp = await fetch("/grade", { method: "POST", body: fd });
-        clearInterval(iv);
-        progressBar.style.width = "100%";
-        const data = await resp.json();
-        if (!resp.ok) { showError(data.error || "Grading error."); goToStep(4); return; }
-        gradingResults = data.results;
+
+        if (!resp.ok) {
+            const data = await resp.json();
+            showError(data.error || "Grading error.");
+            goToStep(4);
+            return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        const results = [];
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const chunks = buffer.split("\n\n");
+            buffer = chunks.pop();
+
+            for (const chunk of chunks) {
+                const line = chunk.trim();
+                if (!line.startsWith("data: ")) continue;
+                const msg = JSON.parse(line.slice(6));
+
+                if (msg.type === "progress") {
+                    progressBar.style.width = ((msg.current - 1) / msg.total * 85 + 5) + "%";
+                    loadingStatus.textContent = `Grading response ${msg.current} of ${msg.total}${msg.filename ? ": " + msg.filename : ""}...`;
+                } else if (msg.type === "result") {
+                    results.push(msg.result);
+                    progressBar.style.width = (results.length / total * 85 + 10) + "%";
+                } else if (msg.type === "done") {
+                    progressBar.style.width = "100%";
+                }
+            }
+        }
+
+        if (results.length === 0) {
+            showError("No grading results received.");
+            goToStep(4);
+            return;
+        }
+
+        gradingResults = results;
         renderResults(gradingResults);
         goToStep(5);
-    } catch (err) { clearInterval(iv); showError("Network error: " + err.message); goToStep(4); }
+    } catch (err) {
+        showError("Network error: " + err.message);
+        goToStep(4);
+    }
 });
 
 /* ===== Results ===== */
